@@ -570,6 +570,19 @@ namespace CryptoExchange.Net.Clients
         }
 
         /// <summary>
+        /// Process connect rate limited
+        /// </summary>
+        protected async virtual Task HandleConnectRateLimitedAsync()
+        {
+            if (ClientOptions.RateLimiterEnabled && RateLimiter is not null && ClientOptions.ConnectDelayAfterRateLimited is not null)
+            {
+                var retryAfter = DateTime.UtcNow.Add(ClientOptions.ConnectDelayAfterRateLimited.Value);
+                _logger.AddingRetryAfterGuard(retryAfter);
+                await RateLimiter.SetRetryAfterGuardAsync(retryAfter, RateLimiting.RateLimitItemType.Connection).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
         /// Connect a socket
         /// </summary>
         /// <param name="socketConnection">The socket to connect</param>
