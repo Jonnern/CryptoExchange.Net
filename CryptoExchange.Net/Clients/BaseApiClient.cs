@@ -108,6 +108,7 @@ namespace CryptoExchange.Net.Clients
         public virtual void Dispose()
         {
             _disposing = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

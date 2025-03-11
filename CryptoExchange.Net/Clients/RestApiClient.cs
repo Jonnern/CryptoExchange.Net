@@ -624,7 +624,7 @@ namespace CryptoExchange.Net.Clients
                 paramString = $" with request body '{request.Content}'";
 
             var headers = request.GetHeaders();
-            if (headers.Count != 0)
+            if (headers.Count > 0)
                 paramString += " with headers " + string.Join(", ", headers.Select(h => h.Key + $"=[{string.Join(",", h.Value)}]"));
 
             TotalRequestsMade++;

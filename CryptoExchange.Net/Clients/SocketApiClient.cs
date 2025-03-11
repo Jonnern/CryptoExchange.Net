@@ -4,6 +4,7 @@ using CryptoExchange.Net.Logging.Extensions;
 using CryptoExchange.Net.Objects;
 using CryptoExchange.Net.Objects.Options;
 using CryptoExchange.Net.Objects.Sockets;
+using CryptoExchange.Net.RateLimiting;
 using CryptoExchange.Net.RateLimiting.Interfaces;
 using CryptoExchange.Net.Sockets;
 using Microsoft.Extensions.Logging;
@@ -263,7 +264,7 @@ namespace CryptoExchange.Net.Clients
             if (subQuery != null)
             {
                 // Send the request and wait for answer
-                var subResult = await socketConnection.SendAndWaitQueryAsync(subQuery, waitEvent).ConfigureAwait(false);
+                var subResult = await socketConnection.SendAndWaitQueryAsync(subQuery, waitEvent, ct).ConfigureAwait(false);
                 if (!subResult)
                 {
                     waitEvent?.Set();
@@ -331,9 +332,9 @@ namespace CryptoExchange.Net.Clients
 
             SocketConnection socketConnection;
             var released = false;
-            await semaphoreSlim.WaitAsync().ConfigureAwait(false);
             try
             {
+                await semaphoreSlim.WaitAsync(ct).ConfigureAwait(false);
                 var socketResult = await GetSocketConnection(url, query.Authenticated, true).ConfigureAwait(false);
                 if (!socketResult)
                     return socketResult.As<THandlerResponse>(default);
@@ -561,24 +562,12 @@ namespace CryptoExchange.Net.Clients
         /// </summary>
         protected async virtual Task HandleConnectRateLimitedAsync()
         {
-            if (ClientOptions.RateLimiterEnabled && RateLimiter is not null && ClientOptions.ConnectDelayAfterRateLimited is not null)
+            if (ClientOptions.RateLimiterEnabled && ClientOptions.ConnectDelayAfterRateLimited is not null)
             {
                 var retryAfter = DateTime.UtcNow.Add(ClientOptions.ConnectDelayAfterRateLimited.Value);
                 _logger.AddingRetryAfterGuard(retryAfter);
-                await RateLimiter.SetRetryAfterGuardAsync(retryAfter, RateLimiting.RateLimitItemType.Connection).ConfigureAwait(false);
-            }
-        }
-
-        /// <summary>
-        /// Process connect rate limited
-        /// </summary>
-        protected async virtual Task HandleConnectRateLimitedAsync()
-        {
-            if (ClientOptions.RateLimiterEnabled && RateLimiter is not null && ClientOptions.ConnectDelayAfterRateLimited is not null)
-            {
-                var retryAfter = DateTime.UtcNow.Add(ClientOptions.ConnectDelayAfterRateLimited.Value);
-                _logger.AddingRetryAfterGuard(retryAfter);
-                await RateLimiter.SetRetryAfterGuardAsync(retryAfter, RateLimiting.RateLimitItemType.Connection).ConfigureAwait(false);
+                RateLimiter ??= new RateLimitGate("");
+                await RateLimiter.SetRetryAfterGuardAsync(retryAfter, RateLimitItemType.Connection).ConfigureAwait(false);
             }
         }
 
@@ -662,8 +651,12 @@ namespace CryptoExchange.Net.Clients
         /// <returns></returns>
         public virtual async Task UnsubscribeAsync(UpdateSubscription subscription)
         {
+#if NET5_0_OR_GREATER
+            ArgumentNullException.ThrowIfNull(subscription, nameof(subscription));
+#else
             if (subscription == null)
                 throw new ArgumentNullException(nameof(subscription));
+#endif
 
             _logger.UnsubscribingSubscription(subscription.SocketId, subscription.Id);
             await subscription.CloseAsync().ConfigureAwait(false);
@@ -840,6 +833,7 @@ namespace CryptoExchange.Net.Clients
 
             semaphoreSlim?.Dispose();
             base.Dispose();
+            GC.SuppressFinalize(this);
         }
 
         /// <summary>

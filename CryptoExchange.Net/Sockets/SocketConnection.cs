@@ -548,7 +548,7 @@ namespace CryptoExchange.Net.Sockets
                         var innerSw = Stopwatch.StartNew();
                         await processor.Handle(this, new DataEvent<object>(deserialized, null, null, originalData, receiveTime, null)).ConfigureAwait(false);
                         if (processor is Query query && query.RequiredResponses != 1)
-                            _logger.LogDebug($"[Sckt {SocketId}] [Req {query.Id}] responses: {query.CurrentResponses}/{query.RequiredResponses}");
+                            _logger.LogDebug("[Sckt {SocketId}] [Req {QueryId}] responses: {CurrentResponses}/{RequiredResponses}", SocketId, query.Id, query.CurrentResponses, query.RequiredResponses);
                         totalUserTime += (int)innerSw.ElapsedMilliseconds;
                     }
                     catch (Exception ex)
@@ -1002,8 +1002,12 @@ namespace CryptoExchange.Net.Sockets
         /// <param name="callback">The callback for processing the response</param>
         public virtual void QueryPeriodic(string identifier, TimeSpan interval, Func<SocketConnection, Query> queryDelegate, Action<SocketConnection, CallResult>? callback)
         {
+#if NET5_0_OR_GREATER
+            ArgumentNullException.ThrowIfNull(queryDelegate, nameof(queryDelegate));
+#else
             if (queryDelegate == null)
                 throw new ArgumentNullException(nameof(queryDelegate));
+#endif
 
             periodicEvent = new AsyncResetEvent();
             periodicTask = Task.Run(async () =>

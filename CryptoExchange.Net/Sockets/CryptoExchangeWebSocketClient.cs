@@ -476,6 +476,7 @@ namespace CryptoExchange.Net.Sockets
             _ctsSource?.Dispose();
             _sendEvent.Dispose();
             _logger.SocketDisposed(Id);
+            GC.SuppressFinalize(this);
         }
 
         /// <summary>
@@ -639,8 +640,7 @@ namespace CryptoExchange.Net.Sockets
                             _logger.SocketReceivedPartialMessage(Id, receiveResult.Count);
 
                             // Write the data to a memory stream to be reassembled later
-                            if (multipartStream == null)
-                                multipartStream = new MemoryStream();
+                            multipartStream ??= new MemoryStream();
                             multipartStream.Write(buffer.Array!, buffer.Offset, receiveResult.Count);
                         }
                         else
